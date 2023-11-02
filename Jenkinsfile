@@ -1,44 +1,35 @@
-pipeline {
-        agent any
-
-        tools {
-            // Install the Maven version configured as "M3" and add it to the path.
-            maven "M3"
-        }
-
+pipeline{
+ environment {
+ registry = "kevb124/vatcal"
+        registryCredentials = "dockerhub_id"
+        dockerImage = ""
+    }
+    agent any
         stages {
-          stage('Checkout') {
-            steps{
-              git branch: "main", url: "https://github.com/kbraszkiewicz/lbg-vat-calculator.git"
-            }
-            
-          }
-          stage('Compile') {
-              steps {
-                 // Run Maven on a Unix agent.
-                 sh "mvn clean compile"
-                }
-           }
-          stage('Test') {
-                steps {
-                 // Run Maven on a Unix agent.
-                 sh "mvn test"
+            stage ('Build Docker Image'){
+                steps{
+                    script {
+                        dockerImage = docker.build(registry)
+                    }
                 }
             }
-          stage('SonarQube') {
-                environment {
-                        scannerHome = tool 'sonarqube'
-                }
+
+            stage ("Push to Docker Hub"){
                 steps {
-                        withSonarQubeEnv('sonar-qube-1') {
-                                sh "${scannerHome}/bin/sonar-scanner"
+                    script {
+                        docker.withRegistry('', registryCredentials) {
+                            dockerImage.push("${env.BUILD_NUMBER}")
+                            dockerImage.push("latest")
                         }
+                    }
                 }
-           }
-          stage('Package') {
+            }
+
+            stage ("Clean up"){
                 steps {
-                    // Run Maven on a Unix agent.
-                    sh "mvn package"
+                    script {
+                        sh 'docker image prune --all --force --filter "until=48h"'
+                           }
                 }
             }
         }
